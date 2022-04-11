@@ -463,13 +463,11 @@ namespace viewer
                         // Do nothing
                     } else {
                         // Replace with pixel
-                        uint r = ((rgb >> 16) & 0xff) >> 3;
-                        uint g = ((rgb >> 8) & 0xff) >> 3;
-                        uint b = ((rgb >> 0) & 0xff) >> 3;
+                        uint r = (((rgb >> 16) & 0xff) * 0x1f + 0xff/2) / 0xff;
+                        uint g = (((rgb >> 8) & 0xff) * 0x1f + 0xff/2) / 0xff;
+                        uint b = (((rgb >> 0) & 0xff) * 0x1f + 0xff/2) / 0xff;
                         uint a = isSemiTransparent ? 1u : 0u;
-                        short c = (short)((r & 0x1f) | ((g & 0x1f) << 5) | ((b & 0x1f) << 10) | (a << 15));
-                        if (c == 0) c = 1 << 10; // Want opaque black, instead use darkest blue
-                        pixels[i] = c;
+                        pixels[i] = (short)((r & 0x1f) | ((g & 0x1f) << 5) | ((b & 0x1f) << 10) | (a << 15));
                     }
                 }
             }
@@ -619,10 +617,10 @@ namespace viewer
                 
                 // TODO: double check that this is correct wrt semi-transparency's 'double brightness' effect
                 //       I think it should be, since that happens afterwards anyway
-                uint r8 = sr * 0xff / 0x1f;
-                uint g8 = sg * 0xff / 0x1f;
-                uint b8 = sb * 0xff / 0x1f;
-                uint a8 = sa * 0xff / 0x01;
+                uint r8 = (sr * 0xff + 0x1f/2) / 0x1f;
+                uint g8 = (sg * 0xff + 0x1f/2) / 0x1f;
+                uint b8 = (sb * 0xff + 0x1f/2) / 0x1f;
+                uint a8 = sa * 0xff;
                 rgba_buffer[i] = (a8 << 24) | (r8 << 16) | (g8 << 8) | b8;
                 // buffer[dp] = (0xffu << 24) | (r8 << 16) | (g8 << 8) | b8;
             }
@@ -809,9 +807,9 @@ namespace viewer
                     int r5 = (layerbuffer[i] >> 10) & 0x1F;
                     int g5 = (layerbuffer[i] >> 5)  & 0x1F;
                     int b5 = (layerbuffer[i] >> 0)  & 0x1F;
-                    int r8 = r5 * 0xff / 0x1f; // because << 3 doesn't map 0x1f to 0xff
-                    int g8 = g5 * 0xff / 0x1f;
-                    int b8 = b5 * 0xff / 0x1f;
+                    int r8 = (r5 * 0xff + 0x1f/2) / 0x1f;
+                    int g8 = (g5 * 0xff + 0x1f/2) / 0x1f;
+                    int b8 = (b5 * 0xff + 0x1f/2) / 0x1f;
                     ptr[i] = 0xff000000 | (uint)((r8 << 16) | (g8 << 8) | b8);
                 }
             }
