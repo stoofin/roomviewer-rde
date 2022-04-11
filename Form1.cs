@@ -467,7 +467,9 @@ namespace viewer
                         uint g = (((rgb >> 8) & 0xff) * 0x1f + 0xff/2) / 0xff;
                         uint b = (((rgb >> 0) & 0xff) * 0x1f + 0xff/2) / 0xff;
                         uint a = isSemiTransparent ? 1u : 0u;
-                        pixels[i] = (short)((r & 0x1f) | ((g & 0x1f) << 5) | ((b & 0x1f) << 10) | (a << 15));
+                        short c = (short)((r & 0x1f) | ((g & 0x1f) << 5) | ((b & 0x1f) << 10) | (a << 15));
+                        if (c == 0) c = 1 << 10; // Want opaque black, instead use darkest blue
+                        pixels[i] = c;
                     }
                 }
             }
