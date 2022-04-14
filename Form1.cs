@@ -477,7 +477,13 @@ namespace viewer
             }
         }
 
-        private void ConvertToPSX(Bitmap src_img, short[] pixels, bool isSemiTransparent) {
+        enum ExportedPNGFormat {
+            Opaque,
+            SemiTransparent,
+            OpaqueAndSTBlack,
+        }
+
+        private void ConvertToPSX(Bitmap src_img, short[] pixels, ExportedPNGFormat format) {
             BitmapData src_data = src_img.LockBits(new Rectangle(0, 0, src_img.Width, src_img.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             Debug.Assert(pixels.Length == src_img.Width * src_img.Height);
             unsafe {
@@ -492,9 +498,16 @@ namespace viewer
                         uint r = (((rgb >> 16) & 0xff) * 0x1f + 0xff/2) / 0xff;
                         uint g = (((rgb >> 8) & 0xff) * 0x1f + 0xff/2) / 0xff;
                         uint b = (((rgb >> 0) & 0xff) * 0x1f + 0xff/2) / 0xff;
-                        uint a = isSemiTransparent ? 1u : 0u;
+                        uint a = format == ExportedPNGFormat.SemiTransparent ? 1u : 0u;
                         short c = (short)((r & 0x1f) | ((g & 0x1f) << 5) | ((b & 0x1f) << 10) | (a << 15));
-                        if (c == 0) c = 1 << 10; // Want opaque black, instead use darkest blue
+                        if (c == 0) { // Opaque black, will be interpreted as transparent unless adjusted
+                            if (format == ExportedPNGFormat.OpaqueAndSTBlack) {
+                                c = 1; // Oh my god shut up, compiler
+                                c <<= 15; // Use semi-transparent black
+                            } else {
+                                c = 1 << 10; // Use darkest blue
+                            }
+                        } 
                         pixels[i] = c;
                     }
                 }
@@ -538,25 +551,33 @@ namespace viewer
                     int w = l.Bounds.Width * 4;
                     int h = l.Bounds.Height * 4;
                     short[] layer_image = new short[w * h];
-                    bool st_okay = false;
+
+                    bool file_found = false;
                     try { 
                         string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-st.png";
                         Bitmap maybe_st = ReadHDLayerPNG(filename, l);
                         if (maybe_st != null) {
-                            st_okay = true;
-                            ConvertToPSX(maybe_st, layer_image, true);
+                            file_found = true;
+                            ConvertToPSX(maybe_st, layer_image, ExportedPNGFormat.SemiTransparent);
                         }
                     } catch { }
-                    bool op_okay = false;
                     try { 
                         string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-op.png";
                         Bitmap maybe_op = ReadHDLayerPNG(filename, l);
                         if (maybe_op != null) {
-                            op_okay = true;
-                            ConvertToPSX(maybe_op, layer_image, false);
+                            file_found = true;
+                            ConvertToPSX(maybe_op, layer_image, ExportedPNGFormat.Opaque);
                         }
                     } catch { }
-                    if (!st_okay && !op_okay) {
+                    try { 
+                        string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-opb.png";
+                        Bitmap maybe_opb = ReadHDLayerPNG(filename, l);
+                        if (maybe_opb != null) {
+                            file_found = true;
+                            ConvertToPSX(maybe_opb, layer_image, ExportedPNGFormat.OpaqueAndSTBlack);
+                        }
+                    } catch { }
+                    if (!file_found) {
                         MessageBox.Show("No valid imports for layer " + l.Index);
                     }
 
@@ -607,6 +628,8 @@ namespace viewer
                 Bitmap dst_img = new Bitmap(w, h, PixelFormat.Format32bppArgb);
                 // Semi-transparent
                 bool semi_transparent_pixels_exist = false;
+                bool semi_transparent_all_black = true;
+                bool semi_transparent_written = false;
                 {
                     BitmapData semi_trans_image_data = dst_img.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
                     uint* dst = (uint*)semi_trans_image_data.Scan0.ToPointer();
@@ -621,12 +644,14 @@ namespace viewer
                             triA = 0;
                         } else {
                             semi_transparent_pixels_exist = true;
+                            semi_transparent_all_black &= rgb == 0;
                             triA = 255;
                         }
                         dst[i] = (triA << 24) | rgb;
                     }
                     dst_img.UnlockBits(semi_trans_image_data);
-                    if (semi_transparent_pixels_exist) {
+                    if (semi_transparent_pixels_exist && !semi_transparent_all_black) {
+                        semi_transparent_written = true;
                         dst_img.Save(path + "-st.png", ImageFormat.Png);
                     }
                 }
@@ -647,12 +672,18 @@ namespace viewer
                             opaque_pixels_exist = true;
                             triA = 255;
                         } else {
-                            triA = 0;
+                            if (semi_transparent_all_black) {
+                                triA = 255;
+                            } else {
+                                triA = 0;
+                            }
                         }
                         dst[i] = (triA << 24) | rgb;
                     }
                     dst_img.UnlockBits(opaque_image_data);
-                    if (opaque_pixels_exist || !semi_transparent_pixels_exist) {
+                    if (semi_transparent_pixels_exist && semi_transparent_all_black) {
+                        dst_img.Save(path + "-opb.png", ImageFormat.Png);
+                    } else if (opaque_pixels_exist || !semi_transparent_written) {
                         dst_img.Save(path + "-op.png", ImageFormat.Png);
                     }
                 }
