@@ -21,10 +21,13 @@ namespace viewer
     public partial class Form1 : Form
     {
         private System.Windows.Forms.Button exportButton;
+        private System.Windows.Forms.Button exportAllButton;
         private System.Windows.Forms.Button importButton;
         private System.Windows.Forms.Button saveChip2Button;
         private System.Windows.Forms.CheckBox hdCheckBox;
+        private System.Windows.Forms.CheckBox cropExportedLayersCheckBox;
         private System.Windows.Forms.Label hdCheckBoxLabel;
+        private System.Windows.Forms.Label cropExportedLayersLabel;
         private System.Windows.Forms.FolderBrowserDialog folderImportDialog;
         private System.Windows.Forms.FolderBrowserDialog folderExportDialog;
         private System.Windows.Forms.SaveFileDialog saveChip2Dialog;
@@ -42,6 +45,13 @@ namespace viewer
             this.exportButton.Size = new System.Drawing.Size(100, 21);
             this.exportButton.Click += new System.EventHandler(this.OnExportClick);
             this.Controls.Add(this.exportButton);
+
+            this.exportAllButton = new System.Windows.Forms.Button();
+            this.exportAllButton.Location = new System.Drawing.Point(800, 35);
+            this.exportAllButton.Text = "Export All Rooms";
+            this.exportAllButton.Size = new System.Drawing.Size(150, 21);
+            this.exportAllButton.Click += new System.EventHandler(this.OnExportAllClick);
+            this.Controls.Add(this.exportAllButton);
 
             this.importButton = new System.Windows.Forms.Button();
             this.importButton.Location = new System.Drawing.Point(375, 35);
@@ -77,6 +87,22 @@ namespace viewer
             this.hdCheckBoxLabel.Size = new System.Drawing.Size(96, 12);
             this.hdCheckBoxLabel.Text = "HD";
             this.Controls.Add(this.hdCheckBoxLabel);
+
+            this.cropExportedLayersCheckBox = new System.Windows.Forms.CheckBox();
+            this.cropExportedLayersCheckBox.Location = new System.Drawing.Point(650, 35);
+            this.cropExportedLayersCheckBox.Name = "cropExportedLayersCheckBox";
+            this.cropExportedLayersCheckBox.Size = new System.Drawing.Size(20, 21);
+            // this.cropExportedLayersCheckBox.Checked = true;
+            this.Controls.Add(this.cropExportedLayersCheckBox);
+
+            this.cropExportedLayersLabel = new System.Windows.Forms.Label();
+            this.cropExportedLayersLabel.AutoSize = true;
+            this.cropExportedLayersLabel.Font = new System.Drawing.Font("宋体", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.cropExportedLayersLabel.Location = new System.Drawing.Point(670, 35);
+            this.cropExportedLayersLabel.Name = "cropExportedLayersLabel";
+            this.cropExportedLayersLabel.Size = new System.Drawing.Size(296, 12);
+            this.cropExportedLayersLabel.Text = "Crop Exported Layers";
+            this.Controls.Add(this.cropExportedLayersLabel);
         }
 
         struct TileCmd
@@ -140,7 +166,7 @@ namespace viewer
         string lastdir = string.Empty;
         string isopath = string.Empty;
 
-        Rectangle bounding;
+        Rectangle roomBounds;
 
         private void ReadCTD(Stream fs)
         {
@@ -254,7 +280,7 @@ namespace viewer
                     //rewind
                     br.BaseStream.Seek(8 + count * 4, SeekOrigin.Begin);
 
-                    bounding = new Rectangle(0, 0, 0, 0);
+                    roomBounds = new Rectangle(0, 0, 0, 0);
                     for (int li = 0; li < count; li++) // layers
                     {
                         layers[li].Index = li;
@@ -286,9 +312,9 @@ namespace viewer
                         }
                         layers[li].Bounds = new Rectangle(minx, miny, maxx - minx + 16, maxy - miny + 16);
                         if (li == 0) {
-                            bounding = layers[li].Bounds;
+                            roomBounds = layers[li].Bounds;
                         } else {
-                            bounding = Rectangle.Union(bounding, layers[li].Bounds);
+                            roomBounds = Rectangle.Union(roomBounds, layers[li].Bounds);
                         }
                     }
                 }
@@ -476,6 +502,26 @@ namespace viewer
             src_img.UnlockBits(src_data);
         }
 
+        private Bitmap ReadHDLayerPNG(string path, Layer l) {
+            Bitmap img = new Bitmap(path, false);
+            if (img.Width == l.Bounds.Width * 4 && img.Height == l.Bounds.Height * 4) {
+                return img;
+            } else if (img.Width == roomBounds.Width * 4 && img.Height == roomBounds.Height * 4) {
+                img = img.Clone(new Rectangle(
+                    (l.Bounds.X - roomBounds.X) * 4,
+                    (l.Bounds.Y - roomBounds.Y) * 4,
+                    l.Bounds.Width * 4, l.Bounds.Height * 4
+                ), img.PixelFormat);
+                return img;
+            } else {
+                MessageBox.Show(path + " must have dimensions " +
+                    l.Bounds.Width * 4 + " x " + l.Bounds.Height * 4 + " or " +
+                    roomBounds.Width * 4 + " x " + roomBounds.Height * 4
+                );
+            }
+            return null;
+        }
+
         private void OnImportClick(object sender, EventArgs e)
         {
             if (folderImportDialog.ShowDialog() == DialogResult.OK)
@@ -495,23 +541,19 @@ namespace viewer
                     bool st_okay = false;
                     try { 
                         string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-st.png";
-                        Bitmap st = new Bitmap(filename, false);
-                        if (st.Width == w && st.Height == h) {
+                        Bitmap maybe_st = ReadHDLayerPNG(filename, l);
+                        if (maybe_st != null) {
                             st_okay = true;
-                            ConvertToPSX(st, layer_image, true);
-                        } else {
-                            MessageBox.Show(filename + " must have dimensions " + w + " x " + h);
+                            ConvertToPSX(maybe_st, layer_image, true);
                         }
                     } catch { }
                     bool op_okay = false;
                     try { 
                         string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-op.png";
-                        Bitmap op = new Bitmap(filename, false);
-                        if (op.Width == w && op.Height == h) {
+                        Bitmap maybe_op = ReadHDLayerPNG(filename, l);
+                        if (maybe_op != null) {
                             op_okay = true;
-                            ConvertToPSX(op, layer_image, false);
-                        } else {
-                            MessageBox.Show(filename + " must have dimensions " + w + " x " + h);
+                            ConvertToPSX(maybe_op, layer_image, false);
                         }
                     } catch { }
                     if (!st_okay && !op_okay) {
@@ -534,99 +576,123 @@ namespace viewer
                 string path = folderExportDialog.SelectedPath;
                 for (int i = 0; i < layers.Length; i++) {
                     Layer l = layers[i];
-                    SaveRawLayer(DrawRawLayer(l), l, path + "/" + loaded_room_name + "-layer" + l.Index);
+                    SaveRawLayer(DrawRawLayer(l), path + "/" + loaded_room_name + "-layer" + l.Index);
                 }
             }
         }
 
-        private void SaveRawLayer(uint[] buffer, Layer layer, string path) {
-            int w = layer.Bounds.Width * (show_hd ? 4 : 1);
-            int h = layer.Bounds.Height * (show_hd ? 4 : 1);
-            var img = new Bitmap(w, h, PixelFormat.Format32bppArgb);
-
-            // Semi-transparent
-            bool semi_transparent_pixels_exist = false;
-            BitmapData semi_trans_image = img.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-            unsafe
-            {
-                uint* ptr = (uint*)semi_trans_image.Scan0.ToPointer();
-                for (int i = w * h - 1; i >= 0; i--) {
-                    uint rgb = buffer[i] & 0xffffff;
-                    uint a = (buffer[i] >> 24) & 0xff;
-                    uint triA;
-                    if (rgb == 0 && a == 0) {
-                        // Transparent
-                        triA = 0;
-                    } else if (rgb != 0 && a == 0) {
-                        triA = 0;
-                    } else {
-                        semi_transparent_pixels_exist = true;
-                        triA = 255;
-                    }
-                    ptr[i] = (triA << 24) | rgb;
-                }
-            }
-            img.UnlockBits(semi_trans_image);
-            if (semi_transparent_pixels_exist) {
-                img.Save(path + "-st.png", ImageFormat.Png);
-            }
-            
-            // Opaque
-            bool opaque_pixels_exist = false;
-            BitmapData opaque_image = img.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-            unsafe
-            {
-                uint* ptr = (uint*)opaque_image.Scan0.ToPointer();
-                for (int i = w * h - 1; i >= 0; i--) {
-                    uint rgb = buffer[i] & 0xffffff;
-                    uint a = (buffer[i] >> 24) & 0xff;
-                    uint triA;
-                    if (rgb == 0 && a == 0) {
-                        // Transparent
-                        triA = 0;
-                    } else if (rgb != 0 && a == 0) {
-                        opaque_pixels_exist = true;
-                        triA = 255;
-                    } else {
-                        triA = 0;
-                    }
-                    ptr[i] = (triA << 24) | rgb;
-                }
-            }
-            img.UnlockBits(opaque_image);
-            if (opaque_pixels_exist || !semi_transparent_pixels_exist) {
-                img.Save(path + "-op.png", ImageFormat.Png);
-            }
-        }
-
-        // Returns RGBA version of layer
-        private uint[] DrawRawLayer(Layer layer)
+        private void OnExportAllClick(object sender, EventArgs e)
         {
-            short[] buffer = new short[layer.Bounds.Width * layer.Bounds.Height * (show_hd ? 16 : 1)];
+            if (folderExportDialog.ShowDialog() == DialogResult.OK)
+            {
+                string path = folderExportDialog.SelectedPath;
+                for (int r = 0; r < total_rooms; r++) {
+                    LoadRoom(r);
+                    for (int i = 0; i < layers.Length; i++) {
+                        Layer l = layers[i];
+                        SaveRawLayer(DrawRawLayer(l), path + "/" + loaded_room_name + "-layer" + l.Index);
+                    }
+                }
+            }
+        }
+
+        private void SaveRawLayer(Bitmap src_bitmap, string path) {
+            int w = src_bitmap.Width;
+            int h = src_bitmap.Height;
+            unsafe
+            {
+                BitmapData src_data = src_bitmap.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                uint* src = (uint*)src_data.Scan0.ToPointer();
+
+                Bitmap dst_img = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+                // Semi-transparent
+                bool semi_transparent_pixels_exist = false;
+                {
+                    BitmapData semi_trans_image_data = dst_img.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                    uint* dst = (uint*)semi_trans_image_data.Scan0.ToPointer();
+                    for (int i = w * h - 1; i >= 0; i--) {
+                        uint rgb = src[i] & 0xffffff;
+                        uint a = (src[i] >> 24) & 0xff;
+                        uint triA;
+                        if (rgb == 0 && a == 0) {
+                            // Transparent
+                            triA = 0;
+                        } else if (rgb != 0 && a == 0) {
+                            triA = 0;
+                        } else {
+                            semi_transparent_pixels_exist = true;
+                            triA = 255;
+                        }
+                        dst[i] = (triA << 24) | rgb;
+                    }
+                    dst_img.UnlockBits(semi_trans_image_data);
+                    if (semi_transparent_pixels_exist) {
+                        dst_img.Save(path + "-st.png", ImageFormat.Png);
+                    }
+                }
+                
+                // Opaque
+                bool opaque_pixels_exist = false;
+                {
+                    BitmapData opaque_image_data = dst_img.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                    uint* dst = (uint*)opaque_image_data.Scan0.ToPointer();
+                    for (int i = w * h - 1; i >= 0; i--) {
+                        uint rgb = src[i] & 0xffffff;
+                        uint a = (src[i] >> 24) & 0xff;
+                        uint triA;
+                        if (rgb == 0 && a == 0) {
+                            // Transparent
+                            triA = 0;
+                        } else if (rgb != 0 && a == 0) {
+                            opaque_pixels_exist = true;
+                            triA = 255;
+                        } else {
+                            triA = 0;
+                        }
+                        dst[i] = (triA << 24) | rgb;
+                    }
+                    dst_img.UnlockBits(opaque_image_data);
+                    if (opaque_pixels_exist || !semi_transparent_pixels_exist) {
+                        dst_img.Save(path + "-op.png", ImageFormat.Png);
+                    }
+                }
+            }
+        }
+
+        private Bitmap DrawRawLayer(Layer layer)
+        {
+            Rectangle bounds = cropExportedLayersCheckBox.Checked ? layer.Bounds : roomBounds;
+
+            int w = bounds.Width * (show_hd ? 4 : 1);
+            int h = bounds.Height * (show_hd ? 4 : 1);
+            short[] buffer = new short[w * h];
 
             foreach (var cmd in layer.CmdList)
             {
-                DrawTile(cmd, layer.Bounds, buffer, TileDrawMode.Blit);
+                DrawTile(cmd, bounds, buffer, TileDrawMode.Blit);
             }
 
-            uint[] rgba_buffer = new uint[buffer.Length];
-            for (int i = 0; i < buffer.Length; i++) {
-                uint sc = (uint)buffer[i];
-                uint sa = (sc >> 15) & 1;
-                uint sb = (sc >> 10) & 0x1F;
-                uint sg = (sc >> 5) & 0x1F;
-                uint sr = sc & 0x1F;
-                
-                // TODO: double check that this is correct wrt semi-transparency's 'double brightness' effect
-                //       I think it should be, since that happens afterwards anyway
-                uint r8 = (sr * 0xff + 0x1f/2) / 0x1f;
-                uint g8 = (sg * 0xff + 0x1f/2) / 0x1f;
-                uint b8 = (sb * 0xff + 0x1f/2) / 0x1f;
-                uint a8 = sa * 0xff;
-                rgba_buffer[i] = (a8 << 24) | (r8 << 16) | (g8 << 8) | b8;
-                // buffer[dp] = (0xffu << 24) | (r8 << 16) | (g8 << 8) | b8;
+            Bitmap rgba = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            BitmapData rgba_data = rgba.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            unsafe
+            {
+                uint* rgba_buffer = (uint*)rgba_data.Scan0.ToPointer();
+                for (int i = 0; i < buffer.Length; i++) {
+                    uint sc = (uint)buffer[i];
+                    uint sa = (sc >> 15) & 1;
+                    uint sb = (sc >> 10) & 0x1F;
+                    uint sg = (sc >> 5) & 0x1F;
+                    uint sr = sc & 0x1F;
+                    
+                    uint r8 = (sr * 0xff + 0x1f/2) / 0x1f;
+                    uint g8 = (sg * 0xff + 0x1f/2) / 0x1f;
+                    uint b8 = (sb * 0xff + 0x1f/2) / 0x1f;
+                    uint a8 = sa * 0xff;
+                    rgba_buffer[i] = (a8 << 24) | (r8 << 16) | (g8 << 8) | b8;
+                }
             }
-            return rgba_buffer;
+            rgba.UnlockBits(rgba_data);
+            return rgba;
         }
 
         enum TileDrawMode {
@@ -764,8 +830,8 @@ namespace viewer
         {
             if(layers==null) return;
 
-            int imWidth = bounding.Width * (show_hd ? 4 : 1);
-            int imHeight = bounding.Height * (show_hd ? 4 : 1);
+            int imWidth = roomBounds.Width * (show_hd ? 4 : 1);
+            int imHeight = roomBounds.Height * (show_hd ? 4 : 1);
             if (layerbuffer == null || layerbuffer.Length != imWidth * imHeight) {
                 layerbuffer = new short[imWidth * imHeight];
             }
@@ -793,7 +859,7 @@ namespace viewer
                     TileCmd[] cmdlist = layers[i].CmdList;
                     for (int l = 0; l < cmdlist.Length; l++)
                     {
-                        DrawTile(cmdlist[l], bounding, layerbuffer, TileDrawMode.Normal);
+                        DrawTile(cmdlist[l], roomBounds, layerbuffer, TileDrawMode.Normal);
                     }
                 }
             }
