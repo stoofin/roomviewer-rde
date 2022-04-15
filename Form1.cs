@@ -23,6 +23,7 @@ namespace viewer
         private System.Windows.Forms.Button exportButton;
         private System.Windows.Forms.Button exportAllButton;
         private System.Windows.Forms.Button importButton;
+        private System.Windows.Forms.Button batchConvertButton;
         private System.Windows.Forms.Button saveChip2Button;
         private System.Windows.Forms.CheckBox hdCheckBox;
         private System.Windows.Forms.CheckBox cropExportedLayersCheckBox;
@@ -31,13 +32,18 @@ namespace viewer
         private System.Windows.Forms.FolderBrowserDialog folderImportDialog;
         private System.Windows.Forms.FolderBrowserDialog folderExportDialog;
         private System.Windows.Forms.SaveFileDialog saveChip2Dialog;
+        private System.Windows.Forms.FolderBrowserDialog saveBatchChip2Dialog;
         public Form1()
         {
             InitializeComponent();
 
             this.saveChip2Dialog = new System.Windows.Forms.SaveFileDialog();
+            this.saveBatchChip2Dialog = new System.Windows.Forms.FolderBrowserDialog();
+            this.saveBatchChip2Dialog.Description = "Choose directory to output chip2 files to";
             this.folderImportDialog = new System.Windows.Forms.FolderBrowserDialog();
+            this.folderImportDialog.Description = "Choose directory to import png files from";
             this.folderExportDialog = new System.Windows.Forms.FolderBrowserDialog();
+            this.folderExportDialog.Description = "Choose directory to export png files to";
 
             this.exportButton = new System.Windows.Forms.Button();
             this.exportButton.Location = new System.Drawing.Point(200, 35);
@@ -52,6 +58,13 @@ namespace viewer
             this.exportAllButton.Size = new System.Drawing.Size(150, 21);
             this.exportAllButton.Click += new System.EventHandler(this.OnExportAllClick);
             this.Controls.Add(this.exportAllButton);
+
+            this.batchConvertButton = new System.Windows.Forms.Button();
+            this.batchConvertButton.Location = new System.Drawing.Point(950, 35);
+            this.batchConvertButton.Text = "Batch Convert to .chip2";
+            this.batchConvertButton.Size = new System.Drawing.Size(150, 21);
+            this.batchConvertButton.Click += new System.EventHandler(this.OnBatchConvertClick);
+            this.Controls.Add(this.batchConvertButton);
 
             this.importButton = new System.Windows.Forms.Button();
             this.importButton.Location = new System.Drawing.Point(375, 35);
@@ -464,16 +477,20 @@ namespace viewer
             flowLayoutPanel1.Width = Width - 50;
         }
 
+        private void SaveChip2(string path) {
+            using (BinaryWriter b = new BinaryWriter(new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite))) {
+                for (int i = 0; i < hd_data.Length; i++) {
+                    b.Write(hd_data[i]);
+                }
+            }
+        }
+
         private void OnSaveChip2Click(object sender, EventArgs e) {
             saveChip2Dialog.Filter = "(*.chip2)|*.chip2";
             saveChip2Dialog.Title = "Save " + loaded_room_name + ".chip2";
             if (saveChip2Dialog.ShowDialog() == DialogResult.OK)
             {
-                using (BinaryWriter b = new BinaryWriter(new FileStream(saveChip2Dialog.FileName, FileMode.OpenOrCreate, FileAccess.ReadWrite))) {
-                    for (int i = 0; i < hd_data.Length; i++) {
-                        b.Write(hd_data[i]);
-                    }
-                }
+                SaveChip2(saveChip2Dialog.FileName);
             }
         }
 
@@ -481,6 +498,38 @@ namespace viewer
             Opaque,
             SemiTransparent,
             OpaqueAndSTBlack,
+        }
+
+        private void ConvertTriToPSX(Bitmap src_img, short[] pixels) {
+            // Legacy format for nobody
+            BitmapData src_data = src_img.LockBits(new Rectangle(0, 0, src_img.Width, src_img.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            Debug.Assert(pixels.Length == src_img.Width * src_img.Height);
+            unsafe {
+                uint* src = (uint*)src_data.Scan0.ToPointer();
+                for (int i = pixels.Length - 1; i >= 0; i--) {
+                    uint rgb = src[i] & 0xffffff;
+                    uint alpha = (src[i] >> 24) & 0xff;
+                    uint r = (((rgb >> 16) & 0xff) * 0x1f + 0xff/2) / 0xff;
+                    uint g = (((rgb >> 8) & 0xff) * 0x1f + 0xff/2) / 0xff;
+                    uint b = (((rgb >> 0) & 0xff) * 0x1f + 0xff/2) / 0xff;
+                    uint a;
+                    if (alpha == 0) {
+                        r = 0;
+                        g = 0;
+                        b = 0;
+                        a = 0;
+                    } else if (alpha == 255) {
+                        a = 0;
+                        if (r == 0 && g == 0 && b == 0) {
+                            b = 1;
+                        }
+                    } else {
+                        a = 1;
+                    }
+                    pixels[i] = (short)((r & 0x1f) | ((g & 0x1f) << 5) | ((b & 0x1f) << 10) | (a << 15));
+                }
+            }
+            src_img.UnlockBits(src_data);
         }
 
         private void ConvertToPSX(Bitmap src_img, short[] pixels, ExportedPNGFormat format) {
@@ -527,12 +576,111 @@ namespace viewer
                 ), img.PixelFormat);
                 return img;
             } else {
-                MessageBox.Show(path + " must have dimensions " +
+                complain(path + " must have dimensions " +
                     l.Bounds.Width * 4 + " x " + l.Bounds.Height * 4 + " or " +
                     roomBounds.Width * 4 + " x " + roomBounds.Height * 4
                 );
             }
             return null;
+        }
+
+        bool is_batch_processing = false;
+        int num_complaints = 0;
+        void complain(string im_mad) {
+            if (is_batch_processing) {
+                num_complaints += 1;
+                Console.Error.WriteLine(im_mad);
+            } else {
+                MessageBox.Show(im_mad);
+            }
+        }
+        void lodge_complaints() {
+            if (num_complaints > 0) {
+                MessageBox.Show("Batch processing logged " + num_complaints + " errors to stderr.");
+                num_complaints = 0;
+            }
+        }
+
+        private bool ImportHDLayer(string from_dir, Layer l) {
+            int w = l.Bounds.Width * 4;
+            int h = l.Bounds.Height * 4;
+            short[] layer_image = new short[w * h];
+
+            bool file_found = false;
+            try { 
+                string filename = from_dir + "/" + loaded_room_name + "-layer" + l.Index + "-st.png";
+                Bitmap maybe_st = ReadHDLayerPNG(filename, l);
+                if (maybe_st != null) {
+                    file_found = true;
+                    ConvertToPSX(maybe_st, layer_image, ExportedPNGFormat.SemiTransparent);
+                }
+            } catch { }
+            try { 
+                string filename = from_dir + "/" + loaded_room_name + "-layer" + l.Index + "-op.png";
+                Bitmap maybe_op = ReadHDLayerPNG(filename, l);
+                if (maybe_op != null) {
+                    file_found = true;
+                    ConvertToPSX(maybe_op, layer_image, ExportedPNGFormat.Opaque);
+                }
+            } catch { }
+            try { 
+                string filename = from_dir + "/" + loaded_room_name + "-layer" + l.Index + "-opb.png";
+                Bitmap maybe_opb = ReadHDLayerPNG(filename, l);
+                if (maybe_opb != null) {
+                    file_found = true;
+                    ConvertToPSX(maybe_opb, layer_image, ExportedPNGFormat.OpaqueAndSTBlack);
+                }
+            } catch { }
+            try { 
+                string filename = from_dir + "/" + loaded_room_name + "-layer" + l.Index + ".tri.png";
+                Bitmap maybe_tri = ReadHDLayerPNG(filename, l);
+                if (maybe_tri != null) {
+                    file_found = true;
+                    ConvertTriToPSX(maybe_tri, layer_image);
+                }
+            } catch { }
+            if (!file_found) {
+                complain("No valid imports for layer " + l.Index + " of room " + loaded_room_name);
+                return false;
+            }
+
+            foreach (var cmd in l.CmdList)
+            {
+                DrawTile(cmd, l.Bounds, layer_image, TileDrawMode.ReverseBlit);
+            }
+            return true;
+        }
+
+        private bool ImportHD(string from_dir) {
+            bool any_imported = false;
+            for (int i = 0; i < layers.Length; i++) {
+                any_imported |= ImportHDLayer(from_dir, layers[i]);
+            }
+            if (!any_imported) {
+                complain("No valid imports for room " + loaded_room_name);
+            }
+            return any_imported;
+        }
+
+        private void OnBatchConvertClick(object sender, EventArgs e) {
+            if (folderImportDialog.ShowDialog() == DialogResult.OK &&
+                saveBatchChip2Dialog.ShowDialog() == DialogResult.OK)
+            {
+                if (!show_hd) {
+                    hdCheckBox.Checked = true;
+                    show_hd = true;
+                }
+                is_batch_processing = true;
+                for (int r = 0; r < total_rooms; r++) {
+                    LoadRoom(r);
+                    if (layers == null) continue;
+                    if (ImportHD(folderImportDialog.SelectedPath)) {
+                        SaveChip2(saveBatchChip2Dialog.SelectedPath + "/" + loaded_room_name + ".chip2");
+                    }
+                }
+                is_batch_processing = false;
+                lodge_complaints();
+            }
         }
 
         private void OnImportClick(object sender, EventArgs e)
@@ -542,50 +690,9 @@ namespace viewer
                 if (!show_hd) {
                     hdCheckBox.Checked = true;
                     show_hd = true;
-                    DrawLayers();
+                    // DrawLayers();
                 }
-                string path = folderImportDialog.SelectedPath;
-                for (int i = 0; i < layers.Length; i++) {
-                    Layer l = layers[i];
-
-                    int w = l.Bounds.Width * 4;
-                    int h = l.Bounds.Height * 4;
-                    short[] layer_image = new short[w * h];
-
-                    bool file_found = false;
-                    try { 
-                        string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-st.png";
-                        Bitmap maybe_st = ReadHDLayerPNG(filename, l);
-                        if (maybe_st != null) {
-                            file_found = true;
-                            ConvertToPSX(maybe_st, layer_image, ExportedPNGFormat.SemiTransparent);
-                        }
-                    } catch { }
-                    try { 
-                        string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-op.png";
-                        Bitmap maybe_op = ReadHDLayerPNG(filename, l);
-                        if (maybe_op != null) {
-                            file_found = true;
-                            ConvertToPSX(maybe_op, layer_image, ExportedPNGFormat.Opaque);
-                        }
-                    } catch { }
-                    try { 
-                        string filename = path + "/" + loaded_room_name + "-layer" + l.Index + "-opb.png";
-                        Bitmap maybe_opb = ReadHDLayerPNG(filename, l);
-                        if (maybe_opb != null) {
-                            file_found = true;
-                            ConvertToPSX(maybe_opb, layer_image, ExportedPNGFormat.OpaqueAndSTBlack);
-                        }
-                    } catch { }
-                    if (!file_found) {
-                        MessageBox.Show("No valid imports for layer " + l.Index);
-                    }
-
-                    foreach (var cmd in l.CmdList)
-                    {
-                        DrawTile(cmd, l.Bounds, layer_image, TileDrawMode.ReverseBlit);
-                    }
-                }
+                ImportHD(folderImportDialog.SelectedPath);
                 DrawLayers();
             }
         }
