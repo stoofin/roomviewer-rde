@@ -671,6 +671,8 @@ namespace viewer
                         }
                     }
                 }
+                // Console.WriteLine("Deduped tiles: " + (tiles.Count - uniqueTiles.Count));
+                Array.Resize(ref chip2, tilesWritten * 64 * 64);
                 return chip2;
             }
         }
