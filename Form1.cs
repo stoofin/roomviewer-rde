@@ -165,6 +165,7 @@ namespace viewer
 
         int total_rooms = 537;
         int loaded_room = -1;
+        int loaded_room_highest_palette = 0;
         List<string> roomNames = new List<string>();
         string loaded_room_name = "No Room";
         byte[] vramdata = new byte[2048 * 512];
@@ -293,6 +294,7 @@ namespace viewer
                     //rewind
                     br.BaseStream.Seek(8 + count * 4, SeekOrigin.Begin);
 
+                    loaded_room_highest_palette = 0;
                     roomBounds = new Rectangle(0, 0, 0, 0);
                     for (int li = 0; li < count; li++) // layers
                     {
@@ -316,6 +318,7 @@ namespace viewer
                             layers[li].CmdList[i].tileX = u;
                             layers[li].CmdList[i].tileY = v;
                             layers[li].CmdList[i].paletteIndex = p;
+                            loaded_room_highest_palette = Math.Max(loaded_room_highest_palette, p);
                             layers[li].CmdList[i].u = u << 1;
                             layers[li].CmdList[i].v = v + 256;
                             layers[li].CmdList[i].p = 0x70000 + (p << 8);
@@ -601,7 +604,78 @@ namespace viewer
             }
         }
 
-        private bool ImportHDLayer(string from_dir, Layer l) {
+        class Tile : IComparable<Tile> {
+            public short[] pixels = new short[64 * 64];
+
+            public int CompareTo(Tile other)
+            {
+                int r = pixels.Length.CompareTo(other.pixels.Length);
+                for (int i = 0; r == 0 && i < pixels.Length; i++) {
+                    r = pixels[i].CompareTo(other.pixels[i]);
+                }
+                return r;
+            }
+        }
+        class TileSet {
+            const int NUM_TILE_COLUMNS = 128;
+            const int NUM_TILE_ROWS = 16;
+            const int NUM_TILE_PALETTES = 32;
+
+            Dictionary<int, Tile> tiles = new Dictionary<int, Tile>();
+
+            public TileSet() {
+                // Empty tileset
+            }
+
+            public TileSet(short[] chip2) {
+                for (int row = 0; row < NUM_TILE_ROWS * NUM_TILE_PALETTES; row++) {
+                    for (int col = 0; col < NUM_TILE_COLUMNS; col++) {
+                        int id = col + row * NUM_TILE_COLUMNS;
+                        int hd_tile_index = chip2[id];
+                        if (hd_tile_index != 0) {
+                            tiles[id] = new Tile();
+                            Array.Copy(chip2, hd_tile_index * 64 * 64, tiles[id].pixels, 0, 64 * 64);
+                        }
+                    }
+                }
+            }
+
+            public Tile get_tile(int row, int col, int palette) {
+                int id = (row + palette * NUM_TILE_ROWS) * NUM_TILE_COLUMNS + col;
+                if (!tiles.ContainsKey(id)) {
+                    tiles[id] = new Tile();
+                }
+                return tiles[id];
+            }
+
+            public short[] convert_to_chip2() {
+                SortedDictionary<Tile, short> uniqueTiles = new SortedDictionary<Tile, short>(); // Used to deduplicate tiles
+
+                short[] chip2 = new short[NUM_TILE_COLUMNS * NUM_TILE_ROWS * NUM_TILE_PALETTES + tiles.Count * 64 * 64];
+                int tilesWritten = 16; // Starts at 16. NUM_TILE_COLUMNS * NUM_TILE_ROWS * NUM_TILE_PALETTES == 16 * 64 * 64
+                for (int row = 0; row < NUM_TILE_ROWS * NUM_TILE_PALETTES; row++) {
+                    for (int col = 0; col < NUM_TILE_COLUMNS; col++) {
+                        int id = col + row * NUM_TILE_COLUMNS;
+                        if (tiles.ContainsKey(id)) {
+                            Tile t = tiles[id];
+                            if (uniqueTiles.ContainsKey(t)) {
+                                chip2[id] = uniqueTiles[t];
+                            } else {
+                                uniqueTiles[t] = (short)tilesWritten;
+                                Array.Copy(t.pixels, 0, chip2, tilesWritten * 64 * 64, 64 * 64);
+                                chip2[id] = (short)tilesWritten;
+                                tilesWritten += 1;
+                            }
+                        } else {
+                            chip2[id] = 0;
+                        }
+                    }
+                }
+                return chip2;
+            }
+        }
+
+        private bool ImportHDLayer(string from_dir, Layer l, TileSet ts) {
             int w = l.Bounds.Width * 4;
             int h = l.Bounds.Height * 4;
             short[] layer_image = new short[w * h];
@@ -646,16 +720,23 @@ namespace viewer
 
             foreach (var cmd in l.CmdList)
             {
+                Debug.Assert(cmd.tileX % 8 == 0);
+                Debug.Assert(cmd.tileY % 16 == 0);
+                Debug.Assert(cmd.paletteIndex % 8 == 0);
+                reverseBlitTileDestination = ts.get_tile(cmd.tileY / 16, cmd.tileX / 8, cmd.paletteIndex / 8).pixels;
                 DrawTile(cmd, l.Bounds, layer_image, TileDrawMode.ReverseBlit);
             }
+
             return true;
         }
 
         private bool ImportHD(string from_dir) {
             bool any_imported = false;
+            TileSet ts = new TileSet(hd_data);
             for (int i = 0; i < layers.Length; i++) {
-                any_imported |= ImportHDLayer(from_dir, layers[i]);
+                any_imported |= ImportHDLayer(from_dir, layers[i], ts);
             }
+            hd_data = ts.convert_to_chip2();
             if (!any_imported) {
                 complain("No valid imports for room " + loaded_room_name);
             }
@@ -839,6 +920,8 @@ namespace viewer
             ReverseBlit
         }
 
+        short[] reverseBlitTileDestination;
+
         private void DrawTile(TileCmd cmd, Rectangle destBounds, short[] destBuffer, TileDrawMode mode)
         {
             int bx = destBounds.X;
@@ -874,7 +957,8 @@ namespace viewer
                         int hd_offset = (hd_tile_index * 64 + h) * 64 + w;
                         sc = hd_data[hd_offset];
                         if (mode == TileDrawMode.ReverseBlit) {
-                            hd_data[hd_offset] = destBuffer[dp];
+                            reverseBlitTileDestination[h * tile_size + w] = destBuffer[dp];
+                            // hd_data[hd_offset] = destBuffer[dp];
                         }
                     }
 
