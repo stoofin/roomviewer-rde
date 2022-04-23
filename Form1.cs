@@ -735,7 +735,7 @@ namespace viewer
         private bool ImportHD(string from_dir) {
             bool any_imported = false;
             TileSet ts = new TileSet(hd_data);
-            for (int i = 0; i < layers.Length; i++) {
+            for (int i = layers.Length - 1; i >= 0; i--) {
                 any_imported |= ImportHDLayer(from_dir, layers[i], ts);
             }
             hd_data = ts.convert_to_chip2();
