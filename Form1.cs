@@ -20,102 +20,133 @@ namespace viewer
 
     public partial class Form1 : Form
     {
-        private System.Windows.Forms.Button exportButton;
-        private System.Windows.Forms.Button exportAllButton;
-        private System.Windows.Forms.Button importButton;
-        private System.Windows.Forms.Button batchConvertButton;
-        private System.Windows.Forms.Button saveChip2Button;
-        private System.Windows.Forms.CheckBox hdCheckBox;
-        private System.Windows.Forms.CheckBox cropExportedLayersCheckBox;
-        private System.Windows.Forms.Label hdCheckBoxLabel;
-        private System.Windows.Forms.Label cropExportedLayersLabel;
-        private System.Windows.Forms.FolderBrowserDialog folderImportDialog;
-        private System.Windows.Forms.FolderBrowserDialog folderExportDialog;
-        private System.Windows.Forms.SaveFileDialog saveChip2Dialog;
-        private System.Windows.Forms.FolderBrowserDialog saveBatchChip2Dialog;
+        private Button exportButton;
+        private Button exportAllButton;
+        private Button importButton;
+        private Button batchConvertButton;
+        private Button saveChip2Button;
+        private CheckBox hdCheckBox;
+        private CheckBox cropExportedLayersCheckBox;
+        private Label hdCheckBoxLabel;
+        private Label cropExportedLayersLabel;
+        private FolderBrowserDialog folderImportDialog;
+        private FolderBrowserDialog folderExportDialog;
+        private SaveFileDialog saveChip2Dialog;
+        private FolderBrowserDialog saveBatchChip2Dialog;
+        private ComboBox roomComboBox;
+        private CheckBox zoomPreviewCheckBox;
+        private Label zoomPreviewCheckBoxLabel;
+
+        private Panel imageScrollPanel;
         public Form1()
         {
             InitializeComponent();
+            roomComboBox = new ComboBox();
+            roomComboBox.Anchor = AnchorStyles.None;
+            roomComboBox.Name = "roomComboBox";
+            roomComboBox.TabIndex = 3;
+            roomComboBox.AutoSize = true;
+            roomComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            roomComboBox.DropDownHeight = 600;
+            roomComboBox.DropDownWidth = 150;
+            roomComboBox.SelectedIndexChanged += new EventHandler(roomComboBox_SelectedIndexChanged);
+            toolsPanel.Controls.Add(roomComboBox);
 
-            this.saveChip2Dialog = new System.Windows.Forms.SaveFileDialog();
-            this.saveBatchChip2Dialog = new System.Windows.Forms.FolderBrowserDialog();
-            this.saveBatchChip2Dialog.Description = "Choose directory to output chip2 files to";
-            this.folderImportDialog = new System.Windows.Forms.FolderBrowserDialog();
-            this.folderImportDialog.Description = "Choose directory to import png files from";
-            this.folderExportDialog = new System.Windows.Forms.FolderBrowserDialog();
-            this.folderExportDialog.Description = "Choose directory to export png files to";
+            saveChip2Dialog = new SaveFileDialog();
+            saveBatchChip2Dialog = new FolderBrowserDialog();
+            saveBatchChip2Dialog.Description = "Choose directory to output chip2 files to";
+            folderImportDialog = new FolderBrowserDialog();
+            folderImportDialog.Description = "Choose directory to import png files from";
+            folderExportDialog = new FolderBrowserDialog();
+            folderExportDialog.Description = "Choose directory to export png files to";
 
-            this.exportButton = new System.Windows.Forms.Button();
-            this.exportButton.Location = new System.Drawing.Point(200, 35);
-            this.exportButton.Text = "Export Room";
-            this.exportButton.Size = new System.Drawing.Size(100, 21);
-            this.exportButton.Click += new System.EventHandler(this.OnExportClick);
-            this.Controls.Add(this.exportButton);
-
-            this.exportAllButton = new System.Windows.Forms.Button();
-            this.exportAllButton.Location = new System.Drawing.Point(800, 35);
-            this.exportAllButton.Text = "Export All Rooms";
-            this.exportAllButton.Size = new System.Drawing.Size(150, 21);
-            this.exportAllButton.Click += new System.EventHandler(this.OnExportAllClick);
-            this.Controls.Add(this.exportAllButton);
-
-            this.batchConvertButton = new System.Windows.Forms.Button();
-            this.batchConvertButton.Location = new System.Drawing.Point(950, 35);
-            this.batchConvertButton.Text = "Batch Convert to .chip2";
-            this.batchConvertButton.Size = new System.Drawing.Size(150, 21);
-            this.batchConvertButton.Click += new System.EventHandler(this.OnBatchConvertClick);
-            this.Controls.Add(this.batchConvertButton);
-
-            this.importButton = new System.Windows.Forms.Button();
-            this.importButton.Location = new System.Drawing.Point(375, 35);
-            this.importButton.Text = "Import HD(x4) Room";
-            this.importButton.Size = new System.Drawing.Size(120, 21);
-            this.importButton.Click += new System.EventHandler(this.OnImportClick);
-            this.Controls.Add(this.importButton);
-
-            this.saveChip2Button = new System.Windows.Forms.Button();
-            this.saveChip2Button.Location = new System.Drawing.Point(500, 35);
-            this.saveChip2Button.Text = "Save HD as .chip2";
-            this.saveChip2Button.Size = new System.Drawing.Size(120, 21);
-            this.saveChip2Button.Click += new System.EventHandler(this.OnSaveChip2Click);
-            this.Controls.Add(this.saveChip2Button);
+            hdCheckBoxLabel = new Label();
+            hdCheckBoxLabel.Anchor = AnchorStyles.None;
+            hdCheckBoxLabel.AutoSize = true;
+            hdCheckBoxLabel.Name = "hdCheckBoxLabel";
+            hdCheckBoxLabel.Text = "HD";
+            toolsPanel.Controls.Add(hdCheckBoxLabel);
             
-            // 
-            // numericUpDown1
-            // 
-            this.hdCheckBox = new System.Windows.Forms.CheckBox();
-            this.hdCheckBox.Location = new System.Drawing.Point(350, 35);
-            this.hdCheckBox.Name = "hdCheckBox";
-            this.hdCheckBox.Size = new System.Drawing.Size(53, 21);
-            this.hdCheckBox.CheckedChanged += new System.EventHandler(this.hdCheckBox_ValueChanged);
-            this.Controls.Add(this.hdCheckBox);
-            // 
-            // label1
-            // 
-            this.hdCheckBoxLabel = new System.Windows.Forms.Label();
-            this.hdCheckBoxLabel.AutoSize = true;
-            this.hdCheckBoxLabel.Font = new System.Drawing.Font("宋体", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.hdCheckBoxLabel.Location = new System.Drawing.Point(300, 35);
-            this.hdCheckBoxLabel.Name = "hdCheckBoxLabel";
-            this.hdCheckBoxLabel.Size = new System.Drawing.Size(96, 12);
-            this.hdCheckBoxLabel.Text = "HD";
-            this.Controls.Add(this.hdCheckBoxLabel);
+            hdCheckBox = new CheckBox();
+            hdCheckBox.Anchor = AnchorStyles.None;
+            hdCheckBox.AutoSize = true;
+            hdCheckBox.Name = "hdCheckBox";
+            hdCheckBox.CheckedChanged += new EventHandler(hdCheckBox_ValueChanged);
+            toolsPanel.Controls.Add(hdCheckBox);
 
-            this.cropExportedLayersCheckBox = new System.Windows.Forms.CheckBox();
-            this.cropExportedLayersCheckBox.Location = new System.Drawing.Point(650, 35);
-            this.cropExportedLayersCheckBox.Name = "cropExportedLayersCheckBox";
-            this.cropExportedLayersCheckBox.Size = new System.Drawing.Size(20, 21);
-            // this.cropExportedLayersCheckBox.Checked = true;
-            this.Controls.Add(this.cropExportedLayersCheckBox);
+            zoomPreviewCheckBoxLabel = new Label();
+            zoomPreviewCheckBoxLabel.Anchor = AnchorStyles.None;
+            zoomPreviewCheckBoxLabel.AutoSize = true;
+            zoomPreviewCheckBoxLabel.Name = "zoomPreviewCheckBoxLabel";
+            zoomPreviewCheckBoxLabel.Text = "Zoom";
+            toolsPanel.Controls.Add(zoomPreviewCheckBoxLabel);
 
-            this.cropExportedLayersLabel = new System.Windows.Forms.Label();
-            this.cropExportedLayersLabel.AutoSize = true;
-            this.cropExportedLayersLabel.Font = new System.Drawing.Font("宋体", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.cropExportedLayersLabel.Location = new System.Drawing.Point(670, 35);
-            this.cropExportedLayersLabel.Name = "cropExportedLayersLabel";
-            this.cropExportedLayersLabel.Size = new System.Drawing.Size(296, 12);
-            this.cropExportedLayersLabel.Text = "Crop Exported Layers";
-            this.Controls.Add(this.cropExportedLayersLabel);
+            zoomPreviewCheckBox = new CheckBox();
+            zoomPreviewCheckBox.Anchor = AnchorStyles.None;
+            zoomPreviewCheckBox.AutoSize = true;
+            zoomPreviewCheckBox.Name = "zoomPreviewCheckBox";
+            zoomPreviewCheckBox.CheckedChanged += new EventHandler(zoomPreviewCheckBox_ValueChanged);
+            toolsPanel.Controls.Add(zoomPreviewCheckBox);
+
+            exportButton = new Button();
+            exportButton.AutoSize = true;
+            exportButton.Text = "Export Room";
+            exportButton.Click += new EventHandler(OnExportClick);
+            toolsPanel.Controls.Add(exportButton);
+
+            exportAllButton = new Button();
+            exportAllButton.AutoSize = true;
+            exportAllButton.Text = "Export All Rooms";
+            exportAllButton.Click += new EventHandler(OnExportAllClick);
+            toolsPanel.Controls.Add(exportAllButton);
+
+            cropExportedLayersLabel = new Label();
+            cropExportedLayersLabel.Anchor = AnchorStyles.None;
+            cropExportedLayersLabel.AutoSize = true;
+            cropExportedLayersLabel.Name = "cropExportedLayersLabel";
+            cropExportedLayersLabel.Text = "Crop Exported Layers";
+            toolsPanel.Controls.Add(cropExportedLayersLabel);
+
+            cropExportedLayersCheckBox = new CheckBox();
+            cropExportedLayersCheckBox.Anchor = AnchorStyles.None;
+            cropExportedLayersCheckBox.AutoSize = true;
+            cropExportedLayersCheckBox.Name = "cropExportedLayersCheckBox";
+            // cropExportedLayersCheckBox.Checked = true;
+            toolsPanel.Controls.Add(cropExportedLayersCheckBox);
+
+            importButton = new Button();
+            importButton.AutoSize = true;
+            importButton.Text = "Import HD(x4) Room";
+            importButton.Click += new EventHandler(OnImportClick);
+            toolsPanel.Controls.Add(importButton);
+
+            saveChip2Button = new Button();
+            saveChip2Button.AutoSize = true;
+            saveChip2Button.Text = "Save HD as .chip2";
+            saveChip2Button.Click += new EventHandler(OnSaveChip2Click);
+            toolsPanel.Controls.Add(saveChip2Button);
+
+            batchConvertButton = new Button();
+            batchConvertButton.AutoSize = true;
+            batchConvertButton.Text = "Batch Convert to .chip2";
+            batchConvertButton.Click += new EventHandler(OnBatchConvertClick);
+            toolsPanel.Controls.Add(batchConvertButton);
+
+            imageScrollPanel = new Panel();
+            imageScrollPanel.Name = "imageScrollPanel";
+            imageScrollPanel.TabIndex = 1;
+            imageScrollPanel.TabStop = false;
+            imageScrollPanel.AutoSize = true;
+            imageScrollPanel.AutoScroll = true;
+            imageScrollPanel.Dock = DockStyle.Fill;
+            Controls.Add(imageScrollPanel);
+            imageScrollPanel.BringToFront();
+
+            pictureBox1.SizeMode = PictureBoxSizeMode.Zoom;
+            pictureBox1.Location = new Point(0, 0);
+            imageScrollPanel.Controls.Add(pictureBox1);
+
+            Resize += new EventHandler(OnResize);
         }
 
         struct TileCmd
@@ -385,6 +416,7 @@ namespace viewer
             DateTime date1 = DateTime.Now;
 
             loaded_room = index;
+            roomComboBox.SelectedIndex = loaded_room;
             Array.Clear(vramdata, 0, vramdata.Length);
 
             using (ZipArchive archive = new ZipArchive(new FileStream(isopath, FileMode.Open, FileAccess.Read, FileShare.Read), ZipArchiveMode.Read))
@@ -471,7 +503,7 @@ namespace viewer
         {
             LoadCfg();
             openFileDialog1.InitialDirectory = lastdir;
-            numericUpDown1.Enabled = false;
+            toolsPanel.Enabled = false;
         }
 
         private void Form1_Resize(object sender, EventArgs e)
@@ -1062,8 +1094,7 @@ namespace viewer
             if (pictureBox1.Image.Width != imWidth || pictureBox1.Image.Height != imHeight) {
                 pictureBox1.Image = new Bitmap(imWidth, imHeight);
             }
-            pictureBox1.Width = pictureBox1.Image.Width;
-            pictureBox1.Height = pictureBox1.Image.Height;
+            updatePictureBoxSize();
 
             Bitmap dest = (Bitmap)(pictureBox1.Image);
             using (Graphics g = Graphics.FromImage(dest))
@@ -1149,10 +1180,12 @@ namespace viewer
                         total_rooms = roomNames.Count;
                     }
 
+                    roomComboBox.Items.Clear();
+                    roomComboBox.Items.AddRange(roomNames.ToArray());
+                    toolsPanel.Enabled = true;
+
                     LoadRoom(0);
-                    numericUpDown1.Maximum = total_rooms - 1;
-                    numericUpDown1.Minimum = 0;
-                    numericUpDown1.Enabled = true;
+
                     lastdir = new FileInfo(openFileDialog1.FileName).Directory.FullName;
                     WriteCfg();
                     DrawLayers();
@@ -1189,10 +1222,12 @@ namespace viewer
             }
         }
 
-        private void numericUpDown1_ValueChanged(object sender, EventArgs e)
+        private void roomComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            LoadRoom((int)numericUpDown1.Value);
-            DrawLayers();
+            if (loaded_room != roomComboBox.SelectedIndex) {
+                LoadRoom(roomComboBox.SelectedIndex);
+                DrawLayers();
+            }
         }
 
         private void hdCheckBox_ValueChanged(object sender, EventArgs e)
@@ -1200,6 +1235,24 @@ namespace viewer
             show_hd = hdCheckBox.Checked;
             // LoadRoom((int)numericUpDown1.Value);
             DrawLayers();
+        }
+
+        private void updatePictureBoxSize() {
+            if (pictureBox1.Image == null) return;
+            if (zoomPreviewCheckBox.Checked) {
+                pictureBox1.ClientSize = new Size(imageScrollPanel.Width, imageScrollPanel.Height);
+            } else {
+                pictureBox1.ClientSize = pictureBox1.Image.Size;
+            }
+        }
+
+        private void zoomPreviewCheckBox_ValueChanged(object sender, EventArgs e)
+        {
+            updatePictureBoxSize();
+        }
+
+        private void OnResize(object sender, EventArgs e) {
+            updatePictureBoxSize();
         }
 
     }

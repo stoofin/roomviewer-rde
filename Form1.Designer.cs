@@ -36,14 +36,14 @@
             this.toolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             this.aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
+            this.toolsPanel = new System.Windows.Forms.FlowLayoutPanel();
+            this.headerPanel = new System.Windows.Forms.Panel();
             this.flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             this.saveFileDialog1 = new System.Windows.Forms.SaveFileDialog();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
-            this.numericUpDown1 = new System.Windows.Forms.NumericUpDown();
             this.label1 = new System.Windows.Forms.Label();
             this.menuStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
             this.SuspendLayout();
             // 
             // menuStrip1
@@ -101,11 +101,19 @@
             this.aboutToolStripMenuItem.Size = new System.Drawing.Size(55, 21);
             this.aboutToolStripMenuItem.Text = "About";
             // 
+            // toolsPanel
+            // 
+            this.toolsPanel.AutoSize = true;
+            this.toolsPanel.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.toolsPanel.Location = new System.Drawing.Point(14, 26);
+            this.toolsPanel.Name = "toolsPanel";
+            this.toolsPanel.Size = new System.Drawing.Size(0, 0);
+            this.toolsPanel.Dock = System.Windows.Forms.DockStyle.Top;
+            // 
             // pictureBox1
             // 
             this.pictureBox1.Location = new System.Drawing.Point(14, 112);
             this.pictureBox1.Name = "pictureBox1";
-            this.pictureBox1.Size = new System.Drawing.Size(100, 50);
             this.pictureBox1.TabIndex = 1;
             this.pictureBox1.TabStop = false;
             // 
@@ -117,18 +125,11 @@
             this.flowLayoutPanel1.Name = "flowLayoutPanel1";
             this.flowLayoutPanel1.Size = new System.Drawing.Size(0, 0);
             this.flowLayoutPanel1.TabIndex = 2;
+            this.flowLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Top;
             // 
             // openFileDialog1
             // 
             this.openFileDialog1.FileName = "openFileDialog1";
-            // 
-            // numericUpDown1
-            // 
-            this.numericUpDown1.Location = new System.Drawing.Point(114, 28);
-            this.numericUpDown1.Name = "numericUpDown1";
-            this.numericUpDown1.Size = new System.Drawing.Size(53, 21);
-            this.numericUpDown1.TabIndex = 3;
-            this.numericUpDown1.ValueChanged += new System.EventHandler(this.numericUpDown1_ValueChanged);
             // 
             // label1
             // 
@@ -138,6 +139,7 @@
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(96, 12);
             this.label1.TabIndex = 4;
+            this.label1.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.label1.Text = "Select a room";
             // 
             // Form1
@@ -145,13 +147,12 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.AutoScroll = true;
-            this.ClientSize = new System.Drawing.Size(897, 500);
-            this.Controls.Add(this.label1);
-            this.Controls.Add(this.numericUpDown1);
+            this.ClientSize = new System.Drawing.Size(950, 500);
             this.Controls.Add(this.flowLayoutPanel1);
-            this.Controls.Add(this.pictureBox1);
-            this.Controls.Add(this.menuStrip1);
+            this.Controls.Add(this.toolsPanel);
+            this.toolsPanel.Controls.Add(this.label1);
             this.MainMenuStrip = this.menuStrip1;
+            this.Controls.Add(this.menuStrip1);
             this.Name = "Form1";
             this.Text = "CC RDE Background Viewer";
             this.Load += new System.EventHandler(this.Form1_Load);
@@ -159,7 +160,6 @@
             this.menuStrip1.ResumeLayout(false);
             this.menuStrip1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -174,11 +174,12 @@
         private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem1;
         private System.Windows.Forms.ToolStripMenuItem aboutToolStripMenuItem;
         private System.Windows.Forms.PictureBox pictureBox1;
+        private System.Windows.Forms.Panel headerPanel;
+        private System.Windows.Forms.FlowLayoutPanel toolsPanel;
         private System.Windows.Forms.FlowLayoutPanel flowLayoutPanel1;
         private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem2;
         private System.Windows.Forms.SaveFileDialog saveFileDialog1;
         private System.Windows.Forms.OpenFileDialog openFileDialog1;
-        private System.Windows.Forms.NumericUpDown numericUpDown1;
         private System.Windows.Forms.Label label1;
 
     }
