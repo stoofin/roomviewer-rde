@@ -27,8 +27,10 @@ namespace viewer
         private Button saveChip2Button;
         private CheckBox hdCheckBox;
         private CheckBox cropExportedLayersCheckBox;
+        private CheckBox skipAlreadyExportedRoomsCheckBox;
         private Label hdCheckBoxLabel;
         private Label cropExportedLayersLabel;
+        private Label skipAlreadyExportedRoomsLabel;
         private FolderBrowserDialog folderImportDialog;
         private FolderBrowserDialog folderExportDialog;
         private SaveFileDialog saveChip2Dialog;
@@ -36,6 +38,9 @@ namespace viewer
         private ComboBox roomComboBox;
         private CheckBox zoomPreviewCheckBox;
         private Label zoomPreviewCheckBoxLabel;
+
+        private StatusBar statusBar;
+        private StatusBarPanel statusBarPanel;
 
         private Panel imageScrollPanel;
         public Form1()
@@ -114,6 +119,19 @@ namespace viewer
             // cropExportedLayersCheckBox.Checked = true;
             toolsPanel.Controls.Add(cropExportedLayersCheckBox);
 
+            skipAlreadyExportedRoomsLabel = new Label();
+            skipAlreadyExportedRoomsLabel.Anchor = AnchorStyles.None;
+            skipAlreadyExportedRoomsLabel.AutoSize = true;
+            skipAlreadyExportedRoomsLabel.Name = "skipAlreadyExportedRoomsLabel";
+            skipAlreadyExportedRoomsLabel.Text = "Skip Existing Rooms";
+            toolsPanel.Controls.Add(skipAlreadyExportedRoomsLabel);
+
+            skipAlreadyExportedRoomsCheckBox = new CheckBox();
+            skipAlreadyExportedRoomsCheckBox.Anchor = AnchorStyles.None;
+            skipAlreadyExportedRoomsCheckBox.AutoSize = true;
+            skipAlreadyExportedRoomsCheckBox.Name = "skipAlreadyExportedRoomsCheckBox";
+            toolsPanel.Controls.Add(skipAlreadyExportedRoomsCheckBox);
+
             importButton = new Button();
             importButton.AutoSize = true;
             importButton.Text = "Import HD(x4) Room";
@@ -145,6 +163,14 @@ namespace viewer
             pictureBox1.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBox1.Location = new Point(0, 0);
             imageScrollPanel.Controls.Add(pictureBox1);
+
+            statusBar = new StatusBar();
+            Controls.Add(statusBar);
+
+            statusBarPanel = new StatusBarPanel();
+            statusBarPanel.Text = "Hello!";
+            statusBarPanel.AutoSize = StatusBarPanelAutoSize.Spring;
+            statusBar.Panels.Add(statusBarPanel);
 
             Resize += new EventHandler(OnResize);
         }
@@ -829,13 +855,32 @@ namespace viewer
             if (folderExportDialog.ShowDialog() == DialogResult.OK)
             {
                 string path = folderExportDialog.SelectedPath;
+
+                HashSet<string> roomsToSkip = new HashSet<string>();
+                if (skipAlreadyExportedRoomsCheckBox.Checked) {
+                    foreach (string filePath in Directory.GetFiles(path)) {
+                        string fileName = Path.GetFileName(filePath);
+                        int hyphenIndex = fileName.IndexOf("-");
+                        if (hyphenIndex != -1) {
+                            roomsToSkip.Add(fileName.Substring(0, hyphenIndex));
+                        }
+                    }
+                }
+
+                statusBar.ShowPanels = true;
                 for (int r = 0; r < total_rooms; r++) {
+                    statusBarPanel.Text = "Exporting room " + r + " of " + total_rooms;
+                    statusBar.Refresh();
+                    if (roomsToSkip.Contains(roomNames[r])) {
+                        continue;
+                    }
                     LoadRoom(r);
                     for (int i = 0; i < layers.Length; i++) {
                         Layer l = layers[i];
                         SaveRawLayer(DrawRawLayer(l), path + "/" + loaded_room_name + "-layer" + l.Index);
                     }
                 }
+                statusBar.ShowPanels = false;
             }
         }
 
