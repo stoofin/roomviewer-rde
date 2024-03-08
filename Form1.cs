@@ -26,9 +26,11 @@ namespace viewer
         private Button batchConvertButton;
         private Button saveChip2Button;
         private CheckBox hdCheckBox;
+        private CheckBox ditherCheckBox;
         private CheckBox cropExportedLayersCheckBox;
         private CheckBox skipAlreadyExportedRoomsCheckBox;
         private Label hdCheckBoxLabel;
+        private Label ditherCheckBoxLabel;
         private Label cropExportedLayersLabel;
         private Label skipAlreadyExportedRoomsLabel;
         private FolderBrowserDialog folderImportDialog;
@@ -137,6 +139,20 @@ namespace viewer
             importButton.Text = "Import HD(x4) Room";
             importButton.Click += new EventHandler(OnImportClick);
             toolsPanel.Controls.Add(importButton);
+
+            
+            ditherCheckBox = new CheckBox();
+            ditherCheckBox.Anchor = AnchorStyles.None;
+            ditherCheckBox.AutoSize = true;
+            ditherCheckBox.Name = "ditherCheckBox";
+            toolsPanel.Controls.Add(ditherCheckBox);
+
+            ditherCheckBoxLabel = new Label();
+            ditherCheckBoxLabel.Anchor = AnchorStyles.None;
+            ditherCheckBoxLabel.AutoSize = true;
+            ditherCheckBoxLabel.Name = "ditherCheckBoxLabel";
+            ditherCheckBoxLabel.Text = "Dither HD Imports";
+            toolsPanel.Controls.Add(ditherCheckBoxLabel);
 
             saveChip2Button = new Button();
             saveChip2Button.AutoSize = true;
@@ -593,21 +609,79 @@ namespace viewer
             src_img.UnlockBits(src_data);
         }
 
+        interface IDither {
+            int pushError(int e);
+        }
+        class NoDither : IDither {
+            public int pushError(int e) {
+                return 0;
+            }
+        }
+        class FloydSteinbergDither : IDither {
+            int[] rowError;
+            int index;
+            int width;
+            public FloydSteinbergDither(int width) {
+                this.width = width;
+                this.rowError = new int[width + 2];
+                this.index = 1;
+            }
+            public int pushError(int e) {
+                // Floyd-Steinberg Dither
+                int nextError = rowError[index + 1] + (e * 7) / 16;
+                rowError[index + 1] = (e * 1) / 16;
+                rowError[index] += (e * 5) / 16;
+                rowError[index - 1] += (e * 3) / 16;
+                index += 1;
+                if (index > width) {
+                    index = 1;
+                    nextError = rowError[index];
+                    rowError[index] = 0;
+                }
+                return nextError;
+            }
+        }
+
+        uint ConvertToPSX_convertTo5BPP(uint c8bit, ref int error) {
+            int r = (int)c8bit * 0x1f + error;
+            int five_bit = Math.Min(Math.Max((r + 0xff / 2) / 0xff, 0), 0x1f);
+            error = r - five_bit * 0xff;
+            return (uint)five_bit;
+        }
+
         private void ConvertToPSX(Bitmap src_img, short[] pixels, ExportedPNGFormat format) {
             BitmapData src_data = src_img.LockBits(new Rectangle(0, 0, src_img.Width, src_img.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             Debug.Assert(pixels.Length == src_img.Width * src_img.Height);
+            IDither dither_r, dither_g, dither_b;
+            if (ditherCheckBox.Checked) {
+                dither_r = new FloydSteinbergDither(src_img.Width);
+                dither_g = new FloydSteinbergDither(src_img.Width);
+                dither_b = new FloydSteinbergDither(src_img.Width);
+            } else {
+                dither_r = new NoDither();
+                dither_g = new NoDither();
+                dither_b = new NoDither();
+            }
+            int err_r = 0;
+            int err_g = 0;
+            int err_b = 0;
             unsafe {
                 uint* src = (uint*)src_data.Scan0.ToPointer();
                 for (int i = pixels.Length - 1; i >= 0; i--) {
                     uint rgb = src[i] & 0xffffff;
                     uint alpha = (src[i] >> 24) & 0xff;
+                    
+                    uint r = ConvertToPSX_convertTo5BPP((rgb >> 16) & 0xff, ref err_r);
+                    err_r = dither_r.pushError(err_r);
+                    uint g = ConvertToPSX_convertTo5BPP((rgb >> 8) & 0xff, ref err_g);
+                    err_g = dither_g.pushError(err_g);
+                    uint b = ConvertToPSX_convertTo5BPP((rgb >> 0) & 0xff, ref err_b);
+                    err_b = dither_b.pushError(err_b);
+
                     if (alpha < 127) { // Arbitrary threshold
                         // Do nothing
                     } else {
                         // Replace with pixel
-                        uint r = (((rgb >> 16) & 0xff) * 0x1f + 0xff/2) / 0xff;
-                        uint g = (((rgb >> 8) & 0xff) * 0x1f + 0xff/2) / 0xff;
-                        uint b = (((rgb >> 0) & 0xff) * 0x1f + 0xff/2) / 0xff;
                         uint a = format == ExportedPNGFormat.SemiTransparent ? 1u : 0u;
                         short c = (short)((r & 0x1f) | ((g & 0x1f) << 5) | ((b & 0x1f) << 10) | (a << 15));
                         if (c == 0) { // Opaque black, will be interpreted as transparent unless adjusted
